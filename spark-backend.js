@@ -63,7 +63,7 @@ export function createSparkBackend(){
    const instId=st.data().instrumentId;
    const inst=instId?await getDoc(d('instruments',instId)):null;
    ensure(inst?.exists()&&inst.data().active===true,'failed-precondition','尚未指定有效樂器');
-   return {stationId:sid,instrumentId:instId,instrument:{name:inst.data().name,category:inst.data().category,emoji:inst.data().emoji}};
+   return {stationId:sid,instrumentId:instId,instrument:{name:inst.data().name,category:inst.data().category,emoji:inst.data().emoji,iconData:inst.data().iconData||null}};
  }
  async function classList(){
    await authRole('any');
