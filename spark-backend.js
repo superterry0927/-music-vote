@@ -5,7 +5,7 @@
  */
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-import {getFirestore,doc,collection,onSnapshot,getDoc,getDocs,setDoc,addDoc,deleteDoc,writeBatch,runTransaction,serverTimestamp,increment,query,where} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {getFirestore,doc,collection,onSnapshot,getDoc,getDocs,setDoc,addDoc,deleteDoc,writeBatch,runTransaction,serverTimestamp,increment,deleteField,query,where} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {firebaseConfig} from './firebase-config.js';
 
 const SEED = [
@@ -24,6 +24,13 @@ const DEFAULT_STATIONS = [
  ['10','instrument_10'],['11','instrument_11'],['12','instrument_12']
 ];
 const categories = new Set(['national','band']);
+function checkedInstrumentIcon(value){
+  if(value===null)return null;
+  ensure(typeof value==='string' && value.length<=82000 &&
+    /^data:image\/webp;base64,[A-Za-z0-9+/]+={0,2}$/.test(value),
+    'invalid-argument','樂器圖片必須是小於 60KB 的 WebP');
+  return value;
+}
 const studentId = (cls,seat)=>`${cls}_${String(seat).padStart(2,'0')}`;
 const clean = (x,n=80)=>String(x??'').trim().slice(0,n);
 const classOk = v=>/^\d{3,4}$/.test(v);
@@ -172,6 +179,11 @@ export function createSparkBackend(){
      const name=clean(data.name,40),cat=clean(data.category,12),id=clean(data.id,100);
      ensure(name&&categories.has(cat),'invalid-argument','請填樂器名稱與國樂／管樂類別');
      const obj={name,category:cat,emoji:clean(data.emoji,8)||'🎵',color:/^#[a-f0-9]{6}$/i.test(data.color||'')?data.color:'#6789C5',active:true,updatedAt:serverTimestamp()};
+    if(Object.prototype.hasOwnProperty.call(data,'iconData')){
+      const icon=checkedInstrumentIcon(data.iconData);
+      if(icon!==null)obj.iconData=icon;
+      else if(id)obj.iconData=deleteField();
+    }
      if(id){
        const prev=await getDoc(d('instruments',id));ensure(prev.exists(),'not-found','樂器不存在');
        ensure(prev.data().category===cat,'invalid-argument','已建立的樂器不可改變類別');

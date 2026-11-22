@@ -123,3 +123,7 @@ https://superterry0927.github.io/-music-vote/?view=station&station=1
 - 第 10 站：`?view=station&station=10`（管樂／小號）
 - 第 11 站：`?view=station&station=11`（管樂／長號）
 - 第 12 站：`?view=station&station=12`（管樂／打擊樂）
+
+## v8：樂器圖示上傳（免費 Spark）
+
+管理員在「國樂／管樂項目」按「修改」，可上傳 PNG、JPG、WebP，原始圖檔不得超過 2MB。網頁先縮圖為 128×128 的 WebP，目標不超過 50KB，再按「儲存樂器」才會把圖片放入 Firestore 原本 `instruments/{id}` 的 `iconData` 欄位。無須開通 Firebase Storage 或 Blaze。移除圖片後恢復 Emoji。既有學生、票數與站點綁定不受影響。現有 Firestore Rules 限制樂器寫入須具管理員角色，不用重新發布規則。正式使用前請在 iPad 與大電視確認顯示。

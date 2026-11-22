@@ -1,4 +1,5 @@
 import {firebaseConfig} from './firebase-config.js';
+import {iconMarkup,compressInstrumentImage} from './instrument-images.js?v=8.0';
 const root=document.getElementById('app');
 const search=new URLSearchParams(location.search);
 const view=search.get('view')||'home';
@@ -41,7 +42,7 @@ function drawDisplay(items,demo=false){
   const total=items.reduce((s,x)=>s+x.votes,0);
   const panel=cat=>{
     const data=items.filter(i=>i.category===cat&&(i.active!==false||i.votes>0)).sort((a,b)=>b.votes-a.votes),sum=data.reduce((s,i)=>s+i.votes,0);
-    return `<section class="score-group"><div class="score-title"><h2>${cat==='national'?'🎻':'🎺'} ${label(cat)}人氣榜</h2><span>${settings.hideCounts&&!demo?'票數暫不公開':`已投 ${sum} 票`}</span></div>${data.map((it,i)=>{const ratio=sum?Math.round(1000*it.votes/sum)/10:0;return `<div class="score-line"><div class="score-row"><b><span class="medal">${i+1}</span> ${value(it.emoji)} ${value(it.name)}</b><span>${settings.hideCounts&&!demo?'等待揭曉':`${it.votes} 票 · ${ratio}%`}</span></div><div class="track"><div class="fill" style="width:${settings.hideCounts&&!demo?0:ratio}%;background:${/^#[0-9a-fA-F]{6}$/.test(it.color)?it.color:'#8797c8'}"></div></div></div>`}).join('')||'<p>目前還沒有樂器項目。</p>'}</section>`;
+    return `<section class="score-group"><div class="score-title"><h2>${cat==='national'?'🎻':'🎺'} ${label(cat)}人氣榜</h2><span>${settings.hideCounts&&!demo?'票數暫不公開':`已投 ${sum} 票`}</span></div>${data.map((it,i)=>{const ratio=sum?Math.round(1000*it.votes/sum)/10:0;return `<div class="score-line"><div class="score-row"><b><span class="medal">${i+1}</span> ${iconMarkup(it,'score-icon')} ${value(it.name)}</b><span>${settings.hideCounts&&!demo?'等待揭曉':`${it.votes} 票 · ${ratio}%`}</span></div><div class="track"><div class="fill" style="width:${settings.hideCounts&&!demo?0:ratio}%;background:${/^#[0-9a-fA-F]{6}$/.test(it.color)?it.color:'#8797c8'}"></div></div></div>`}).join('')||'<p>目前還沒有樂器項目。</p>'}</section>`;
   };
   root.innerHTML=shell(`<div class="display-top"><div><div class="eyebrow">🏆 LIVE MUSIC VOTE</div><h1>${value(settings.title)}</h1><p>全校樂器人氣排行榜${demo?' · 範例數據':''}</p></div><div class="display-total"><span>有效投票總數</span><strong>${demo?total:(settings.hideCounts?'—':total)}</strong></div></div>
     <div class="score-grid">${panel('national')}${panel('band')}</div><div class="display-footer"><span>📊 ${statusText(settings.status)}</span><button class="button ghost" id="fullscreen">⛶ 電視全螢幕</button></div>`);
@@ -50,7 +51,7 @@ function drawDisplay(items,demo=false){
 async function initCloud(){
   if(!isReady)return false;
   try{
-    const {createSparkBackend}=await import('./spark-backend.js?v=7.1');
+    const {createSparkBackend}=await import('./spark-backend.js?v=8.0');
     cloud=createSparkBackend();
     return true;
   }catch(e){
@@ -116,7 +117,7 @@ async function stationStart(){
   }catch(e){root.innerHTML=shell(`<section class="auth-card"><h2>無法使用此站</h2><div class="message error">${h(e.message)}</div><button id="logout" class="button ghost">登出</button></section>`);document.getElementById('logout').onclick=logout;}
 }
 function stationLayout(content){
-  root.innerHTML=shell(`<section class="station-head"><div><span class="eyebrow">第 ${stationInfo.stationId} 站 ・ ${label(stationInfo.instrument?.category)}</span><h1>${h(stationInfo.instrument?.emoji||'🎵')} 投給 ${h(stationInfo.instrument?.name||'未指定樂器')}</h1><p>每位同學每類樂器只能投一票</p></div><button id="stationLogout" class="button ghost small">工作人員登出</button></section><div id="notice"></div><section class="student-panel">${content}</section>`);
+  root.innerHTML=shell(`<section class="station-head"><div><span class="eyebrow">第 ${stationInfo.stationId} 站 ・ ${label(stationInfo.instrument?.category)}</span><h1>${iconMarkup(stationInfo.instrument,'station-icon')} 投給 ${h(stationInfo.instrument?.name||'未指定樂器')}</h1><p>每位同學每類樂器只能投一票</p></div><button id="stationLogout" class="button ghost small">工作人員登出</button></section><div id="notice"></div><section class="student-panel">${content}</section>`);
   // Enter distraction-free student voting mode on iPad (Safari or Home Screen web app).
   document.body.classList.add('station-kiosk');
   document.body.dataset.stationStep='class';
@@ -141,7 +142,7 @@ function stationChooseSeat(){
 }
 function stationConfirm(){
   stationLayout(`<div class="step">確認投票</div><h2>請確認你的資料</h2><div class="identity"><div class="identity-class">${h(student.classCode)} 班 ・ ${student.seat} 號</div><div class="identity-name">${h(student.name)}</div></div>
-  <div class="confirm-target">確定要投票給 <strong>${h(stationInfo.instrument.emoji)} ${h(stationInfo.instrument.name)}</strong> 嗎？</div>
+  <div class="confirm-target">確定要投票給 <strong>${iconMarkup(stationInfo.instrument,'confirm-icon')} ${h(stationInfo.instrument.name)}</strong> 嗎？</div>
   <div class="actions"><button class="button ghost" id="cancel">返回修改</button><button class="button primary" id="confirm">✓ 確認投票</button></div>`);
   document.body.dataset.stationStep='confirm';
   document.getElementById('cancel').onclick=stationChooseSeat;
@@ -195,7 +196,13 @@ function adminScreen(){
  <div class="mini-metrics"><div><span>學生總數</span><strong>${d.studentCount}</strong></div><div><span>有效選票</span><strong>${d.voteCount}</strong></div><div><span>國樂項目</span><strong>${active.filter(x=>x.category==='national').length}</strong></div><div><span>管樂項目</span><strong>${active.filter(x=>x.category==='band').length}</strong></div></div>
  <section class="admin-panel"><h2>⚙ 活動設定</h2><div class="inline-fields"><label>活動名稱<input id="eventTitle" maxlength="80" value="${h(settings.title||'')}"></label><label>活動狀態<select id="eventStatus">${opt([{id:'open',label:'開放投票'},{id:'paused',label:'暫停投票'},{id:'closed',label:'結束投票'}],settings.status)}</select></label><label class="checkline"><input id="hideCounts" type="checkbox" ${settings.hideCounts?'checked':''}>電視暫時隱藏票數</label></div><button id="saveSettings" class="button primary">儲存活動設定</button></section>
  <section class="admin-panel"><h2>📱 十二台 iPad 站點設定</h2>${missingStations.length?`<div class="message">還缺少 ${missingStations.length} 個站點。按下補齊按鈕只會建立缺少的站點，不影響既有站點、學生及票數。<p><button class="button primary" id="createMissingStations">補齊 12 個站點</button></p></div>`:''}<div class="settings-grid">${stationSlots.map(n=>{const st=d.stations.find(s=>s.id===String(n));return `<div class="setting-item"><b>第 ${n} 站</b><select data-station="${n}">${opt([{id:'',label:'尚未指定'},...active.map(i=>({id:i.id,label:`${label(i.category)}・${i.name}`}))],st?.instrumentId||'')}</select></div>`}).join('')}</div><p class="fine">站點使用獨立的 Firebase Authentication 帳號；Firestore 安全規則會驗證帳號綁定站號。Spark 免費方案需使用帳號 UID 綁定。</p><details><summary>綁定站點帳號</summary><div class="inline-fields"><label>投票站<select id="accountStation">${opt(stationSlots.map(n=>({id:n,label:`第 ${n} 站`})),1)}</select></label><label>站點帳號 UID（不是 Email）<input type="text" id="accountUID" placeholder="請從 Firebase Authentication → 使用者 複製 UID"></label></div><button class="button ghost" id="bindAccount">綁定此帳號</button></details></section>
- <section class="admin-panel"><h2>🎼 國樂／管樂項目</h2><div class="instruments-grid">${items.map(i=>`<div class="instrument-row"><span>${h(i.emoji)} ${h(i.name)} <small>(${label(i.category)})${!i.active?' [已封存]':''}</small></span>${i.active?`<button class="button tiny ghost" data-edit="${h(i.id)}">修改</button><button class="button tiny danger" data-archive="${h(i.id)}">刪除／封存</button>`:''}</div>`).join('')}</div><h3>新增／修改樂器</h3><form id="instrumentForm"><input type="hidden" id="editId"><div class="inline-fields"><label>樂器名稱<input id="instName" placeholder="例如：薩克斯風" required></label><label>類別<select id="instCategory">${opt([{id:'national',label:'國樂'},{id:'band',label:'管樂'}],'national')}</select></label><label>圖示<input id="instEmoji" placeholder="🎵" maxlength="8"></label><label>色彩<input id="instColor" type="color" value="#6686ca"></label></div><button class="button primary" type="submit">儲存樂器</button></form></section>
+ <section class="admin-panel"><h2>🎼 國樂／管樂項目</h2><div class="instruments-grid">${items.map(i=>`<div class="instrument-row"><span class="instrument-label">${iconMarkup(i,'admin-icon',true)} ${h(i.name)} <small>(${label(i.category)})${!i.active?' [已封存]':''}</small></span>${i.active?`<button class="button tiny ghost" data-edit="${h(i.id)}">修改</button><button class="button tiny danger" data-archive="${h(i.id)}">刪除／封存</button>`:''}</div>`).join('')}</div><h3>新增／修改樂器</h3><form id="instrumentForm"><input type="hidden" id="editId"><div class="inline-fields"><label>樂器名稱<input id="instName" placeholder="例如：薩克斯風" required></label><label>類別<select id="instCategory">${opt([{id:'national',label:'國樂'},{id:'band',label:'管樂'}],'national')}</select></label><label>備用 Emoji<input id="instEmoji" placeholder="🎵" maxlength="8"></label><label>色彩<input id="instColor" type="color" value="#6686ca"></label></div>
+  <div class="icon-upload"><label for="instImage">上傳樂器圖片（PNG／JPG／WebP，原始檔限 2MB）</label>
+  <div class="icon-upload-main"><input id="instImage" type="file" accept="image/png,image/jpeg,image/webp">
+    <div id="instImagePreview" class="icon-preview" aria-live="polite">🎵</div>
+    <button type="button" class="button ghost" id="removeInstrumentImage">清除圖片，恢復 Emoji</button></div>
+  <small id="instImageStatus" class="icon-upload-hint" role="status">上傳圖片會自動縮成 128×128 WebP（50KB 以下），按下儲存才會更新。</small></div>
+  <div class="actions instrument-edit-actions"><button class="button primary" type="submit" id="saveInstrumentButton">儲存樂器</button><button type="button" class="button ghost" id="newInstrument">新增另一個樂器</button></div></form></section>
  <section class="admin-panel"><h2>📚 學生名冊</h2><p>可匯入 CSV 或 Excel XLSX，第一列請使用「班級、座號、姓名」。每人國樂及管樂各限一票。</p><div class="inline-fields"><label>上傳名冊<input id="rosterFile" type="file" accept=".csv,.xlsx,.xls"></label><label class="checkline"><input id="replaceRoster" type="checkbox">整份替換（已有投票不可使用）</label></div><button id="importRoster" class="button primary">匯入學生</button><button id="template" class="button ghost">下載名冊範本</button></section>
  <section class="admin-panel"><h2>🏫 各班投票率</h2><div class="tablewrap"><table><thead><tr><th>班級</th><th>學生數</th><th>國樂已投</th><th>國樂完成率</th><th>管樂已投</th><th>管樂完成率</th><th>查看</th></tr></thead><tbody>${d.classes.map(c=>`<tr><td>${h(c.classCode)}</td><td>${c.total}</td><td>${c.national}</td><td>${c.total?Math.round(c.national/c.total*100):0}%</td><td>${c.band}</td><td>${c.total?Math.round(c.band/c.total*100):0}%</td><td><button class="button tiny ghost" data-classinfo="${h(c.classCode)}">明細</button></td></tr>`).join('')}</tbody></table></div><div id="classInfo"></div><div class="actions"><button id="exportClasses" class="button ghost">匯出班級統計 CSV</button><button id="exportVotes" class="button ghost">匯出投票明細 CSV</button></div></section>
  <section class="admin-panel dangerzone"><h2>⚠ 測試資料管理</h2><p>清除選票前請暫停投票。此操作不可復原。正式活動請先匯出備份，並在暫停投票後才執行。</p><button id="clearVotes" class="button danger">清除全部選票與票數</button></section>`);
@@ -209,9 +216,88 @@ function adminScreen(){
  },'設定已儲存')};
  document.querySelectorAll('[data-station]').forEach(el=>el.onchange=()=>runAdmin(()=>callable('adminAction',{op:'assignStation',stationId:el.dataset.station,instrumentId:el.value}),'站點已更新'));
  document.getElementById('bindAccount').onclick=()=>runAdmin(()=>callable('adminAction',{op:'bindStationUser',uid:document.getElementById('accountUID').value,stationId:document.getElementById('accountStation').value}),'站點帳號已綁定');
- document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const i=items.find(i=>i.id===b.dataset.edit);document.getElementById('editId').value=i.id;document.getElementById('instName').value=i.name;document.getElementById('instCategory').value=i.category;document.getElementById('instCategory').disabled=true;document.getElementById('instEmoji').value=i.emoji;document.getElementById('instColor').value=i.color;document.getElementById('instName').focus()});
- document.querySelectorAll('[data-archive]').forEach(b=>b.onclick=()=>{if(confirm('確定要封存此樂器？已有票數保留歷史資料，且需先解除投票站綁定。'))runAdmin(()=>callable('adminAction',{op:'archiveInstrument',id:b.dataset.archive}),'樂器已封存')});
- document.getElementById('instrumentForm').onsubmit=e=>{e.preventDefault();return runAdmin(()=>callable('adminAction',{op:'upsertInstrument',id:document.getElementById('editId').value,name:document.getElementById('instName').value,category:document.getElementById('instCategory').value,emoji:document.getElementById('instEmoji').value,color:document.getElementById('instColor').value}),'樂器已儲存')};
+ let pendingImage=undefined; // undefined=keep current, null=remove, string=replace
+ const imageInput=document.getElementById('instImage');
+ const imageStatus=document.getElementById('instImageStatus');
+ function editorItem(){return items.find(x=>x.id===document.getElementById('editId').value)}
+ function showImagePreview(){
+   const oldItem=editorItem();
+   const icon=pendingImage===undefined?oldItem?.iconData:pendingImage;
+   document.getElementById('instImagePreview').innerHTML=iconMarkup({
+     iconData:icon,emoji:document.getElementById('instEmoji').value||'🎵',
+     name:document.getElementById('instName').value||'樂器'
+   },'preview-icon');
+ }
+ function resetEditor(){
+   document.getElementById('instrumentForm').reset();
+   document.getElementById('editId').value='';
+   document.getElementById('instCategory').disabled=false;
+   imageInput.value='';
+   pendingImage=undefined;
+   imageStatus.textContent='可選擇新圖片，或者使用 Emoji。圖片會自動縮為 128×128 WebP。';
+   showImagePreview();
+ }
+ document.getElementById('newInstrument').onclick=resetEditor;
+ document.getElementById('instEmoji').addEventListener('input',showImagePreview);
+ document.getElementById('removeInstrumentImage').onclick=()=>{
+   pendingImage=null;
+   imageInput.value='';
+   imageStatus.textContent='已選擇清除圖片。按下「儲存樂器」後才會套用。';
+   showImagePreview();
+ };
+ imageInput.addEventListener('change',async()=>{
+   const file=imageInput.files?.[0];
+   if(!file)return;
+   imageInput.disabled=true;
+   const save=document.getElementById('saveInstrumentButton');
+   save.disabled=true;
+   imageStatus.textContent='正在縮圖及壓縮圖片…';
+   try {
+     const result=await compressInstrumentImage(file);
+     pendingImage=result.dataUrl;
+     imageStatus.textContent='圖片已處理完成：128×128 WebP，'+result.kb+' KB。按「儲存樂器」完成上傳。';
+     showImagePreview();
+   }catch(e){
+     imageInput.value='';
+     imageStatus.textContent='圖片處理失敗：'+e.message;
+     alert(e.message);
+   }finally{
+     imageInput.disabled=false;
+     save.disabled=false;
+   }
+ });
+ document.querySelectorAll('[data-edit]').forEach(button=>button.onclick=()=>{
+   const i=items.find(x=>x.id===button.dataset.edit);
+   document.getElementById('editId').value=i.id;
+   document.getElementById('instName').value=i.name;
+   document.getElementById('instCategory').value=i.category;
+   document.getElementById('instCategory').disabled=true;
+   document.getElementById('instEmoji').value=i.emoji;
+   document.getElementById('instColor').value=i.color;
+   pendingImage=undefined;
+   imageInput.value='';
+   imageStatus.textContent=i.iconData?'已載入現有圖片，選擇其他圖片可取代。':'目前沒有上傳圖片，可新增實物圖示。';
+   showImagePreview();
+   document.getElementById('instName').focus();
+ });
+ document.querySelectorAll('[data-archive]').forEach(button=>button.onclick=()=>{
+   if(confirm('確定要封存此樂器？已有票數保留歷史資料，且需先解除投票站綁定。'))
+     runAdmin(()=>callable('adminAction',{op:'archiveInstrument',id:button.dataset.archive}),'樂器已封存');
+ });
+ document.getElementById('instrumentForm').onsubmit=e=>{
+   e.preventDefault();
+   const data={
+     op:'upsertInstrument',
+     id:document.getElementById('editId').value,
+     name:document.getElementById('instName').value,
+     category:document.getElementById('instCategory').value,
+     emoji:document.getElementById('instEmoji').value,
+     color:document.getElementById('instColor').value
+   };
+   if(pendingImage!==undefined)data.iconData=pendingImage;
+   return runAdmin(()=>callable('adminAction',data),'樂器與圖示已儲存');
+ };
+ showImagePreview();
  document.getElementById('template').onclick=()=>csvDownload('北成國樂管樂_名冊範本.csv',[{'班級':'101','座號':1,'姓名':'測試小明'},{'班級':'101','座號':2,'姓名':'測試小華'}]);
  document.getElementById('importRoster').onclick=importRoster;
  document.querySelectorAll('[data-classinfo]').forEach(b=>b.onclick=()=>showClassDetail(b.dataset.classinfo));

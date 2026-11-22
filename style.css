@@ -9,3 +9,20 @@
 @media(max-width:930px){.choice-grid{grid-template-columns:repeat(4,1fr)}.seat-grid{grid-template-columns:repeat(6,1fr)}.score-grid{grid-template-columns:1fr}.display-top h1{font-size:30px}.settings-grid{grid-template-columns:repeat(2,1fr)}.station-head h1{font-size:33px}}
 @media(max-width:640px){main{padding:16px 12px 40px}.header{padding:12px}.header nav{gap:9px;font-size:11px}.brand b{font-size:14px}.brand small{font-size:8px}.hero{padding:29px}.hero h1{font-size:39px}.station-grid{grid-template-columns:repeat(2,1fr)}.tools{grid-template-columns:1fr}.station-tile{min-height:140px}.score-group{padding:16px}.score-title h2{font-size:19px}.score-row{font-size:15px}.score-row span{font-size:12px}.display-top{align-items:start;gap:12px}.display-total{padding:12px;min-width:105px}.display-total strong{font-size:35px}.display-total span{font-size:10px}.station-head{padding:20px 14px;align-items:start}.station-head h1{font-size:25px}.student-panel{padding:19px;min-height:400px}.student-panel h2{font-size:27px}.choice-grid{grid-template-columns:repeat(3,1fr);gap:9px}.choice{min-height:77px;font-size:22px}.seat-grid{grid-template-columns:repeat(5,1fr)}.choice.seat{min-height:62px}.identity-name{font-size:41px}.confirm-target{font-size:19px}.confirm-target strong{font-size:25px}.mini-metrics{grid-template-columns:repeat(2,1fr)}.settings-grid,.instruments-grid{grid-template-columns:1fr}.admin-top{align-items:start;flex-direction:column}.admin-panel{padding:17px}.inline-fields{display:grid}.student-panel .actions .button{min-width:auto;flex:1}}
 @media(min-width:1100px){body:has(.display-top) main{max-width:1600px}.score-group{min-height:480px}}
+
+/* 樂器照片：有上傳圖示則顯示縮小 WebP，沒有則保留 Emoji */
+.music-icon,.emoji-icon{display:inline-flex;vertical-align:middle;align-items:center;justify-content:center;flex:none;object-fit:contain}
+.music-icon{width:1.5em;height:1.5em;border-radius:6px}
+.music-icon.admin-icon,.emoji-icon.admin-icon{width:34px;height:34px;font-size:26px}
+.music-icon.score-icon,.emoji-icon.score-icon{width:34px;height:34px;font-size:25px}
+.music-icon.station-icon,.emoji-icon.station-icon{width:1.3em;height:1.3em;font-size:inherit}
+.music-icon.confirm-icon,.emoji-icon.confirm-icon{width:1.4em;height:1.4em;font-size:inherit}
+.music-icon.preview-icon,.emoji-icon.preview-icon{width:94px;height:94px;font-size:65px}
+.instrument-row .instrument-label{display:inline-flex;align-items:center;flex:1;min-width:0;gap:8px}
+.icon-upload{border:1px solid #dbe4f4;background:#f8faff;border-radius:16px;padding:18px;margin:15px 0}
+.icon-upload>label{display:block;margin-bottom:12px;font-size:14px}
+.icon-upload-main{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.icon-upload-main input[type=file]{flex:1 1 210px;max-width:480px;background:white}
+.icon-preview{display:flex;align-items:center;justify-content:center;width:114px;height:114px;border-radius:14px;border:1px solid #d7dfed;background:white;overflow:hidden}
+.icon-upload-hint{display:block;margin-top:11px;font-size:12px;color:#536c94;line-height:1.5}
+.instrument-edit-actions{justify-content:flex-start;gap:12px}
