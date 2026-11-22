@@ -50,7 +50,7 @@ function drawDisplay(items,demo=false){
 async function initCloud(){
   if(!isReady)return false;
   try{
-    const {createSparkBackend}=await import('./spark-backend.js');
+    const {createSparkBackend}=await import('./spark-backend.js?v=7.1');
     cloud=createSparkBackend();
     return true;
   }catch(e){
