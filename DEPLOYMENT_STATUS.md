@@ -1,11 +1,12 @@
-# 北成國樂管樂投票｜部署狀態（2026-11-22）
+# 北成國樂管樂投票｜v4 Spark 免費版部署狀態
 
-- ✅ GitHub 程式碼：已上傳 `main`：https://github.com/superterry0927/-music-vote
-- ✅ GitHub Pages：GitHub Actions「pages build and deployment」執行成功（run #1）；公開網址預期為 https://superterry0927.github.io/-music-vote/ 。尚待實際瀏覽器開啟驗收。
-- ✅ Firebase 前端 Web App 設定：`music-vote-3de89` 已填入。
-- ⛔ Firebase 後端：尚無證據已部署 Cloud Functions 或 Firestore Rules；無法宣稱正式線上投票已啟用。
-- ⛔ Firebase Authentication、管理員角色及六站帳號：仍需在 Firebase Console 設定與驗證。
-- ✅ `?demo=1` 可用於操作預覽（模擬票數不會跨裝置同步）。
-- 📖 後續步驟：請參考 [FIREBASE_下一步.md](./FIREBASE_下一步.md)。
+- GitHub 儲存庫： https://github.com/superterry0927/-music-vote
+- GitHub Pages： https://superterry0927.github.io/-music-vote/
+- Firebase 專案： `music-vote-3de89`，**Spark 免費方案**
+- v4 前端：改為直接存取 Firestore，不再使用 Cloud Functions。
+- Firestore Security Rules：已編寫原始碼，**尚須到 Firebase Console 的 Firestore Rules 按「發布」才會生效**。
+- 管理員 `roles/{uid}`：仍需 Firebase Console 手動建立。
+- 六台投票站 UID：需在 Authentication 新增帳號後由後台綁定。
+- 正式投票：尚待 Firebase 控制台設定及六台 iPad 驗收；不可宣稱已上線可投票。
 
-注意：不要提交任何學生名冊、管理密碼或服務帳戶私鑰到此公開儲存庫。
+詳細步驟：[FIREBASE_下一步.md](./FIREBASE_下一步.md)。
