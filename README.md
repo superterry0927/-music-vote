@@ -90,7 +90,7 @@ firebase.json                  Firebase 部署規格
 - ✅ Web App 設定：`music-vote-3de89`，並建立 `.firebaserc` 限定部署專案。
 - ✅ 離線體驗：首頁開啟 `?demo=1` 可選班級、座號、確認投票。此模式不會寫入 Firebase，也不會跨裝置同步。
 - ✅ 初始六個站點設定：國樂 3 站（二胡、琵琶、笛子），管樂 3 站（長笛、單簧管、薩克斯風）。後台可變更綁定。
-- ⛔ ✅ `superterry0927/-music-vote` 已建立並可上傳網站程式；GitHub Pages 設定與 Firebase Cloud Functions 仍需另行啟用。
+- ⛔ ✅ `superterry0927/-music-vote` 已建立並已上傳網站程式；GitHub Pages 設定與 Firebase Cloud Functions 仍需另行啟用。
 - ⛔ Firebase 外掛未連結：尚未代為開啟 Firestore、Authentication、Blaze、發布 Cloud Functions、套用安全規則或建立使用者。
 - ⛔ 未進行真實跨六台 iPad 的網路／權限／投票壓力驗收。
 

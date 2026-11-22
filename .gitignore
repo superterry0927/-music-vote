@@ -1,0 +1,10 @@
+node_modules/
+.firebase/
+.env
+.env.*
+*.log
+serviceAccount*.json
+firebase-adminsdk*.json
+students*.csv
+students*.xlsx
+private/
