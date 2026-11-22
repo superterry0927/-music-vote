@@ -6,13 +6,20 @@ const demoMode=search.get('demo')==='1';
 const requestedStation=Number(search.get('station')||1);
 const isReady=!demoMode&&Boolean(firebaseConfig.apiKey&&firebaseConfig.projectId&&firebaseConfig.authDomain&&firebaseConfig.appId);
 const categories={national:'國樂',band:'管樂'};
+const stationSlots=Array.from({length:12},(_,i)=>i+1);
 const sample=[
-  {id:'a',name:'二胡',category:'national',emoji:'🎻',votes:36,color:'#5B79D6'},
-  {id:'b',name:'琵琶',category:'national',emoji:'🪕',votes:29,color:'#D87896'},
-  {id:'c',name:'笛子',category:'national',emoji:'🪈',votes:18,color:'#39A58A'},
-  {id:'d',name:'長笛',category:'band',emoji:'🪈',votes:31,color:'#42A6AD'},
-  {id:'e',name:'單簧管',category:'band',emoji:'🎵',votes:24,color:'#6485CA'},
-  {id:'f',name:'小號',category:'band',emoji:'🎺',votes:17,color:'#D96F6C'}
+ {id:'a',name:'二胡',category:'national',emoji:'🎻',votes:36,color:'#5B79D6'},
+ {id:'b',name:'琵琶',category:'national',emoji:'🪕',votes:29,color:'#D87896'},
+ {id:'c',name:'笛子',category:'national',emoji:'🪈',votes:18,color:'#39A58A'},
+ {id:'d',name:'長笛',category:'band',emoji:'🪈',votes:31,color:'#42A6AD'},
+ {id:'e',name:'單簧管',category:'band',emoji:'🎵',votes:24,color:'#6485CA'},
+ {id:'f',name:'薩克斯風',category:'band',emoji:'🎷',votes:17,color:'#E0AA39'},
+ {id:'g',name:'揚琴',category:'national',emoji:'🎶',votes:14,color:'#C29441'},
+ {id:'h',name:'中阮',category:'national',emoji:'🎸',votes:13,color:'#8B73C9'},
+ {id:'i',name:'打擊',category:'national',emoji:'🥁',votes:11,color:'#E18D58'},
+ {id:'j',name:'小號',category:'band',emoji:'🎺',votes:9,color:'#D96F6C'},
+ {id:'k',name:'長號',category:'band',emoji:'🎼',votes:7,color:'#9072BD'},
+ {id:'l',name:'打擊樂',category:'band',emoji:'🥁',votes:6,color:'#69A96D'}
 ];
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const link=(v,station)=>`?view=${encodeURIComponent(v)}${station?`&station=${station}`:''}${demoMode?'&demo=1':''}`;
@@ -24,8 +31,8 @@ const value=(s)=>h(s);
 const shell=(body,toolbar='')=>`<header class="header"><a href="${link('home')}" class="brand">🎶 <span><b>北成國小</b><small>國樂 × 管樂 · 樂器人氣大票選</small></span></a><nav>${toolbar||`<a href="${link('home')}">首頁</a><a href="${link('display')}">電視展示</a><a href="${link('admin')}">教師後台</a>`}</nav></header>${!isReady?'<div class="demo-alert">⚠ '+(demoMode?'操作預覽模式':'尚未連接 Firebase')+'：僅為畫面體驗，不能儲存、跨裝置同步或進行正式投票。</div>':''}<main>${body}</main>`;
 const statusText=status=>({open:'投票進行中',paused:'投票暫停中',closed:'投票已結束'})[status]||'尚未啟用';
 function mainHome(){
-  root.innerHTML=shell(`<section class="hero"><div class="eyebrow">🎼 BEICHENG MUSIC FESTIVAL</div><h1>找出你的<br><span>最愛樂器！</span></h1><p>六個 iPad 投票站 · 國樂管樂各一票 · 投票結果即時公布</p><span class="chip ${settings.status==='open'?'ok':''}">● ${statusText(settings.status)}</span></section>
-  <section class="block"><div class="sectionHead"><h2>🎻 選擇投票站</h2><p>每個 iPad 只要設定一次站號，現場就不需要重新選樂器</p></div><div class="station-grid">${[1,2,3,4,5,6].map(n=>`<a class="station-tile" href="${link('station',n)}"><div class="bigicon">${['🎻','🪕','🪈','🎷','🎺','🥁'][n-1]}</div><strong>第 ${n} 站</strong><span>開啟 iPad 投票頁面</span></a>`).join('')}</div></section>
+  root.innerHTML=shell(`<section class="hero"><div class="eyebrow">🎼 BEICHENG MUSIC FESTIVAL</div><h1>找出你的<br><span>最愛樂器！</span></h1><p>十二個 iPad 投票站 · 國樂管樂各一票 · 投票結果即時公布</p><span class="chip ${settings.status==='open'?'ok':''}">● ${statusText(settings.status)}</span></section>
+  <section class="block"><div class="sectionHead"><h2>🎻 選擇投票站</h2><p>每個 iPad 只要設定一次站號，現場就不需要重新選樂器</p></div><div class="station-grid">${stationSlots.map(n=>`<a class="station-tile" href="${link('station',n)}"><div class="bigicon">${sample[n-1]?.emoji||'🎵'}</div><strong>第 ${n} 站</strong><span>開啟 iPad 投票頁面</span></a>`).join('')}</div></section>
   <section class="tools"><a href="${link('display')}" class="tool-card"><b>📺 大電視排行榜</b><span>票數比例、國樂與管樂排行</span></a><a href="${link('admin')}" class="tool-card"><b>🔐 教師管理後台</b><span>名冊匯入、樂器增刪、班級投票率</span></a></section>
   <p class="fine">投票採班級＋座號選擇，需有現場工作人員監督以避免代投。${!demoMode?`<br><a href="?view=home&demo=1">不登入也能體驗操作預覽（不計票）</a>`:''}</p>`);
 }
@@ -156,25 +163,27 @@ async function adminStart(){
 const opt=(items,current)=>items.map(x=>`<option value="${h(x.id)}" ${String(x.id)===String(current)?'selected':''}>${h(x.label)}</option>`).join('');
 
 function initAdminScreen(){
-  root.innerHTML=shell(`<section class="auth-card"><h1>🎼 初始化北成樂器投票</h1><p>目前還沒有活動資料。請先建立十二個樂器、六站及 120 位假學生資料。正式學生名冊須等測試完成再匯入。</p><button id="bootstrap" class="button primary">建立測試活動</button><div id="bootstrapNote"></div><button id="logout" class="button ghost">登出</button></section>`);
+  root.innerHTML=shell(`<section class="auth-card"><h1>🎼 初始化北成樂器投票</h1><p>目前還沒有活動資料。請先建立十二個樂器、十二站及 120 位假學生資料。正式學生名冊須等測試完成再匯入。</p><button id="bootstrap" class="button primary">建立測試活動</button><div id="bootstrapNote"></div><button id="logout" class="button ghost">登出</button></section>`);
   document.getElementById('logout').onclick=logout;
   document.getElementById('bootstrap').onclick=async()=>{try{document.getElementById('bootstrap').disabled=true;await callable('adminAction',{op:'bootstrap'});await adminStart()}catch(e){document.getElementById('bootstrapNote').innerHTML=`<div class="message error">${h(e.message)}</div>`;document.getElementById('bootstrap').disabled=false}};
 }
 
 function adminScreen(){
  const d=adminDashboard,items=d.instruments.sort((a,b)=>(a.order||0)-(b.order||0)),active=items.filter(i=>i.active);
+ const missingStations=stationSlots.filter(n=>!d.stations.some(s=>s.id===String(n)));
  const settings=d.settings||settings;
  const controls=`<div class="admin-actions"><button class="button ghost" id="refreshAdmin">⟳ 重新整理</button><button class="button ghost" id="logout">登出</button></div>`;
  root.innerHTML=shell(`<div class="admin-top"><div><div class="eyebrow">🔐 教師管理</div><h1>樂器投票管理中心</h1><p>Firebase Spark 免費版 · 班級投票率 · 國樂管樂分別計票</p></div>${controls}</div><div id="adminMessage"></div>
  <div class="mini-metrics"><div><span>學生總數</span><strong>${d.studentCount}</strong></div><div><span>有效選票</span><strong>${d.voteCount}</strong></div><div><span>國樂項目</span><strong>${active.filter(x=>x.category==='national').length}</strong></div><div><span>管樂項目</span><strong>${active.filter(x=>x.category==='band').length}</strong></div></div>
  <section class="admin-panel"><h2>⚙ 活動設定</h2><div class="inline-fields"><label>活動名稱<input id="eventTitle" maxlength="80" value="${h(settings.title||'')}"></label><label>活動狀態<select id="eventStatus">${opt([{id:'open',label:'開放投票'},{id:'paused',label:'暫停投票'},{id:'closed',label:'結束投票'}],settings.status)}</select></label><label class="checkline"><input id="hideCounts" type="checkbox" ${settings.hideCounts?'checked':''}>電視暫時隱藏票數</label></div><button id="saveSettings" class="button primary">儲存活動設定</button></section>
- <section class="admin-panel"><h2>📱 六台 iPad 站點設定</h2><div class="settings-grid">${[1,2,3,4,5,6].map(n=>{const st=d.stations.find(s=>s.id===String(n));return `<div class="setting-item"><b>第 ${n} 站</b><select data-station="${n}">${opt([{id:'',label:'尚未指定'},...active.map(i=>({id:i.id,label:`${label(i.category)}・${i.name}`}))],st?.instrumentId||'')}</select></div>`}).join('')}</div><p class="fine">站點使用獨立的 Firebase Authentication 帳號；Firestore 安全規則會驗證帳號綁定站號。Spark 免費方案需使用帳號 UID 綁定。</p><details><summary>綁定站點帳號</summary><div class="inline-fields"><label>投票站<select id="accountStation">${opt([1,2,3,4,5,6].map(n=>({id:n,label:`第 ${n} 站`})),1)}</select></label><label>站點帳號 UID（不是 Email）<input type="text" id="accountUID" placeholder="請從 Firebase Authentication → 使用者 複製 UID"></label></div><button class="button ghost" id="bindAccount">綁定此帳號</button></details></section>
+ <section class="admin-panel"><h2>📱 十二台 iPad 站點設定</h2>${missingStations.length?`<div class="message">還缺少 ${missingStations.length} 個站點。按下補齊按鈕只會建立缺少的站點，不影響既有站點、學生及票數。<p><button class="button primary" id="createMissingStations">補齊 12 個站點</button></p></div>`:''}<div class="settings-grid">${stationSlots.map(n=>{const st=d.stations.find(s=>s.id===String(n));return `<div class="setting-item"><b>第 ${n} 站</b><select data-station="${n}">${opt([{id:'',label:'尚未指定'},...active.map(i=>({id:i.id,label:`${label(i.category)}・${i.name}`}))],st?.instrumentId||'')}</select></div>`}).join('')}</div><p class="fine">站點使用獨立的 Firebase Authentication 帳號；Firestore 安全規則會驗證帳號綁定站號。Spark 免費方案需使用帳號 UID 綁定。</p><details><summary>綁定站點帳號</summary><div class="inline-fields"><label>投票站<select id="accountStation">${opt(stationSlots.map(n=>({id:n,label:`第 ${n} 站`})),1)}</select></label><label>站點帳號 UID（不是 Email）<input type="text" id="accountUID" placeholder="請從 Firebase Authentication → 使用者 複製 UID"></label></div><button class="button ghost" id="bindAccount">綁定此帳號</button></details></section>
  <section class="admin-panel"><h2>🎼 國樂／管樂項目</h2><div class="instruments-grid">${items.map(i=>`<div class="instrument-row"><span>${h(i.emoji)} ${h(i.name)} <small>(${label(i.category)})${!i.active?' [已封存]':''}</small></span>${i.active?`<button class="button tiny ghost" data-edit="${h(i.id)}">修改</button><button class="button tiny danger" data-archive="${h(i.id)}">刪除／封存</button>`:''}</div>`).join('')}</div><h3>新增／修改樂器</h3><form id="instrumentForm"><input type="hidden" id="editId"><div class="inline-fields"><label>樂器名稱<input id="instName" placeholder="例如：薩克斯風" required></label><label>類別<select id="instCategory">${opt([{id:'national',label:'國樂'},{id:'band',label:'管樂'}],'national')}</select></label><label>圖示<input id="instEmoji" placeholder="🎵" maxlength="8"></label><label>色彩<input id="instColor" type="color" value="#6686ca"></label></div><button class="button primary" type="submit">儲存樂器</button></form></section>
  <section class="admin-panel"><h2>📚 學生名冊</h2><p>可匯入 CSV 或 Excel XLSX，第一列請使用「班級、座號、姓名」。每人國樂及管樂各限一票。</p><div class="inline-fields"><label>上傳名冊<input id="rosterFile" type="file" accept=".csv,.xlsx,.xls"></label><label class="checkline"><input id="replaceRoster" type="checkbox">整份替換（已有投票不可使用）</label></div><button id="importRoster" class="button primary">匯入學生</button><button id="template" class="button ghost">下載名冊範本</button></section>
  <section class="admin-panel"><h2>🏫 各班投票率</h2><div class="tablewrap"><table><thead><tr><th>班級</th><th>學生數</th><th>國樂已投</th><th>國樂完成率</th><th>管樂已投</th><th>管樂完成率</th><th>查看</th></tr></thead><tbody>${d.classes.map(c=>`<tr><td>${h(c.classCode)}</td><td>${c.total}</td><td>${c.national}</td><td>${c.total?Math.round(c.national/c.total*100):0}%</td><td>${c.band}</td><td>${c.total?Math.round(c.band/c.total*100):0}%</td><td><button class="button tiny ghost" data-classinfo="${h(c.classCode)}">明細</button></td></tr>`).join('')}</tbody></table></div><div id="classInfo"></div><div class="actions"><button id="exportClasses" class="button ghost">匯出班級統計 CSV</button><button id="exportVotes" class="button ghost">匯出投票明細 CSV</button></div></section>
  <section class="admin-panel dangerzone"><h2>⚠ 測試資料管理</h2><p>清除選票前請暫停投票。此操作不可復原。正式活動請先匯出備份，並在暫停投票後才執行。</p><button id="clearVotes" class="button danger">清除全部選票與票數</button></section>`);
  document.getElementById('logout').onclick=logout;
  document.getElementById('refreshAdmin').onclick=adminStart;
+ document.getElementById('createMissingStations')?.addEventListener('click',()=>runAdmin(()=>callable('adminAction',{op:'ensureTwelveStations'}),'已補齊十二站，原有設定保留'));
  document.getElementById('saveSettings').onclick=async()=>{await runAdmin(async()=>{
    await callable('adminAction',{op:'setTitle',title:document.getElementById('eventTitle').value});
    await callable('adminAction',{op:'setHideCounts',hideCounts:document.getElementById('hideCounts').checked});

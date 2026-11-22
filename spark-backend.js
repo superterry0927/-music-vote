@@ -15,6 +15,14 @@ const SEED = [
  ['band','小號','🎺','#D96F6C'],['band','長號','🎼','#9072BD'],['band','打擊樂','🥁','#69A96D']
 ];
 const SHARDS = 24;
+const stationValid = id => /^(?:[1-9]|1[0-2])$/.test(String(id));
+// 1–6 retain existing instrument mappings; 7–12 complete six instruments per category.
+const DEFAULT_STATIONS = [
+ ['1','instrument_1'],['2','instrument_2'],['3','instrument_3'],
+ ['4','instrument_7'],['5','instrument_8'],['6','instrument_9'],
+ ['7','instrument_4'],['8','instrument_5'],['9','instrument_6'],
+ ['10','instrument_10'],['11','instrument_11'],['12','instrument_12']
+];
 const categories = new Set(['national','band']);
 const studentId = (cls,seat)=>`${cls}_${String(seat).padStart(2,'0')}`;
 const clean = (x,n=80)=>String(x??'').trim().slice(0,n);
@@ -42,7 +50,7 @@ export function createSparkBackend(){
  async function stationProfile(){
    const role=await authRole('station');
    const sid=String(role.stationId||'');
-   ensure(/^[1-6]$/.test(sid),'permission-denied','帳號尚未綁定正確站號');
+   ensure(stationValid(sid),'permission-denied','帳號尚未綁定正確站號');
    const st=await getDoc(d('stations',sid));
    ensure(st.exists()&&st.data().enabled!==false,'failed-precondition','此投票站已停用');
    const instId=st.data().instrumentId;
@@ -67,7 +75,7 @@ export function createSparkBackend(){
    const role=await authRole('station');
    const cls=clean(data.classCode,10),seat=Number(data.seat);validClassSeat(cls,seat);
    const sid=String(role.stationId||'');
-   ensure(/^[1-6]$/.test(sid),'permission-denied','帳號沒有綁定投票站');
+   ensure(stationValid(sid),'permission-denied','帳號沒有綁定投票站');
    const sidStudent=studentId(cls,seat);
    const stationDoc=d('stations',sid),studentDoc=d('students',sidStudent),settingsDoc=d('settings','public');
    // Read the current station before choosing the target instrument and shard.
@@ -125,12 +133,32 @@ export function createSparkBackend(){
      const batch=writeBatch(db);
      batch.set(d('settings','public'),{title:'北成國小｜國樂・管樂人氣票選',status:'paused',hideCounts:false,updatedAt:serverTimestamp()});
      for(const [i,s] of SEED.entries())batch.set(d('instruments',`instrument_${i+1}`),{category:s[0],name:s[1],emoji:s[2],color:s[3],active:true,order:i});
-     for(let i=1;i<=6;i++)batch.set(d('stations',String(i)),{instrumentId:`instrument_${i<=3?i:i+3}`,enabled:true});
+     for(const [sid,instrumentId] of DEFAULT_STATIONS)batch.set(d('stations',sid),{instrumentId,enabled:true});
      for(const cls of ['101','102','201','202']){
        batch.set(d('classes',cls),{seats:Array.from({length:30},(_,i)=>i+1),total:30});
        for(let seat=1;seat<=30;seat++)batch.set(d('students',studentId(cls,seat)),{classCode:cls,seat,name:`測試學生${cls}-${seat}`,active:true,isTest:true});
      }
      await batch.commit();return {ok:true};
+   }
+   if(op==='ensureTwelveStations'){
+     // Add only missing stations. Existing assignments, student records and votes stay intact.
+     return runTransaction(db,async tx=>{
+       const settingsRef=d('settings','public');
+       const refs=DEFAULT_STATIONS.map(([sid])=>d('stations',sid));
+       const [settingsSnap,...stationSnaps]=await Promise.all([
+         tx.get(settingsRef),...refs.map(ref=>tx.get(ref))
+       ]);
+       ensure(settingsSnap.exists(),'failed-precondition','請先初始化活動');
+       ensure(settingsSnap.data().status!=='open','failed-precondition','請先暫停投票，再新增站點');
+       let created=0;
+       for(let i=0;i<DEFAULT_STATIONS.length;i++){
+         if(!stationSnaps[i].exists()){
+           tx.set(refs[i],{instrumentId:DEFAULT_STATIONS[i][1],enabled:true});
+           created++;
+         }
+       }
+       return {ok:true,created};
+     });
    }
    if(op==='setStatus'){
      const status=clean(data.status,16);ensure(['open','paused','closed'].includes(status),'invalid-argument','無效的活動狀態');
@@ -158,13 +186,13 @@ export function createSparkBackend(){
    }
    if(op==='assignStation'){
      const sid=clean(data.stationId,2),instId=clean(data.instrumentId,100);
-     ensure(/^[1-6]$/.test(sid),'invalid-argument','站號須為 1～6');
+     ensure(stationValid(sid),'invalid-argument','站號須為 1～12');
      if(instId){const it=await getDoc(d('instruments',instId));ensure(it.exists()&&it.data().active===true,'invalid-argument','此樂器無法選用');}
      await setDoc(d('stations',sid),{instrumentId:instId||null,enabled:true},{merge:true});return {ok:true};
    }
    if(op==='bindStationUser'){
      const uid=clean(data.uid,128),sid=clean(data.stationId,2);
-     ensure(/^[a-zA-Z0-9:_\-]{12,128}$/.test(uid)&&/^[1-6]$/.test(sid),'invalid-argument','請填有效的站點 UID 與站號（不是 Email）');
+     ensure(/^[a-zA-Z0-9:_\-]{12,128}$/.test(uid)&&stationValid(sid),'invalid-argument','請填有效的站點 UID 與站號 1～12（不是 Email）');
      ensure(uid!==auth.currentUser.uid,'invalid-argument','不可將管理員帳號綁定為投票站');
      await setDoc(d('roles',uid),{role:'station',stationId:sid,active:true});return {ok:true};
    }
