@@ -117,15 +117,20 @@ async function stationStart(){
 }
 function stationLayout(content){
   root.innerHTML=shell(`<section class="station-head"><div><span class="eyebrow">第 ${stationInfo.stationId} 站 ・ ${label(stationInfo.instrument?.category)}</span><h1>${h(stationInfo.instrument?.emoji||'🎵')} 投給 ${h(stationInfo.instrument?.name||'未指定樂器')}</h1><p>每位同學每類樂器只能投一票</p></div><button id="stationLogout" class="button ghost small">工作人員登出</button></section><div id="notice"></div><section class="student-panel">${content}</section>`);
+  // Enter distraction-free student voting mode on iPad (Safari or Home Screen web app).
+  document.body.classList.add('station-kiosk');
+  document.body.dataset.stationStep='class';
   document.getElementById('stationLogout').onclick=logout;
 }
 function stationChooseClass(){
+  window.scrollTo(0,0);
   stationLayout(`<div class="step">STEP 1 ／ 2</div><h2>請選擇班級</h2><div class="choice-grid">${classes.map(c=>`<button class="choice" data-class="${h(c.code)}">${h(c.code)} 班</button>`).join('')}</div><p class="fine">由工作人員協助核對學生班級及座號。</p>`);
   document.querySelectorAll('[data-class]').forEach(b=>b.onclick=()=>{selectedClass=b.dataset.class;stationChooseSeat()});
 }
 function stationChooseSeat(){
   const cls=classes.find(c=>c.code===selectedClass);
   stationLayout(`<div class="step">STEP 2 ／ 2</div><h2>${h(selectedClass)} 班 · 請選擇座號</h2><button id="goBack" class="button ghost">← 返回班級</button><div class="choice-grid seat-grid">${(cls?.seats||[]).map(n=>`<button class="choice seat" data-seat="${n}">${n}</button>`).join('')}</div>`);
+  document.body.dataset.stationStep='seat';
   document.getElementById('goBack').onclick=stationChooseClass;
   document.querySelectorAll('[data-seat]').forEach(b=>b.onclick=async()=>{
     if(stationBusy)return;stationBusy=true;document.querySelectorAll('[data-seat]').forEach(x=>x.disabled=true);
@@ -138,6 +143,7 @@ function stationConfirm(){
   stationLayout(`<div class="step">確認投票</div><h2>請確認你的資料</h2><div class="identity"><div class="identity-class">${h(student.classCode)} 班 ・ ${student.seat} 號</div><div class="identity-name">${h(student.name)}</div></div>
   <div class="confirm-target">確定要投票給 <strong>${h(stationInfo.instrument.emoji)} ${h(stationInfo.instrument.name)}</strong> 嗎？</div>
   <div class="actions"><button class="button ghost" id="cancel">返回修改</button><button class="button primary" id="confirm">✓ 確認投票</button></div>`);
+  document.body.dataset.stationStep='confirm';
   document.getElementById('cancel').onclick=stationChooseSeat;
   document.getElementById('confirm').onclick=async()=>{
     if(stationBusy)return;stationBusy=true;document.getElementById('confirm').disabled=true;
@@ -147,9 +153,15 @@ function stationConfirm(){
   };
 }
 function stationResult(ok,message){stationLayout(`<div class="vote-result ${ok?'success':'failure'}"><div class="result-icon">${ok?'🎉':'⚠️'}</div><h1>${ok?'投票成功！':'尚未完成投票'}</h1><p>${h(message)}</p><button id="next" class="button ${ok?'primary':'ghost'}">下一位同學</button><small>將自動返回班級選擇畫面</small></div>`);
+  document.body.dataset.stationStep='result';
   document.getElementById('next').onclick=stationChooseClass;student=null;selectedClass='';setTimeout(()=>{if(view==='station'&&document.getElementById('next'))stationChooseClass()},ok?1700:3000);
 }
-async function logout(){await cloud.signOut(cloud.auth);loginPage(view==='admin'?'admin':'station');}
+async function logout(){
+  document.body.classList.remove('station-kiosk');
+  delete document.body.dataset.stationStep;
+  await cloud.signOut(cloud.auth);
+  loginPage(view==='admin'?'admin':'station');
+}
 
 function csvDownload(name,rows){if(!rows.length){alert('沒有可匯出的資料');return;}
  const esc=v=>{let s=String(v??'');if(/^[=+@-]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"'};
