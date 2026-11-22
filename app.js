@@ -1,4 +1,4 @@
-import {firebaseConfig,cloudFunctionsRegion} from './firebase-config.js';
+import {firebaseConfig} from './firebase-config.js';
 const root=document.getElementById('app');
 const search=new URLSearchParams(location.search);
 const view=search.get('view')||'home';
@@ -42,33 +42,35 @@ function drawDisplay(items,demo=false){
 }
 async function initCloud(){
   if(!isReady)return false;
-  try {
-    const [{initializeApp},{getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut},{getFirestore,doc,collection,onSnapshot},{getFunctions,httpsCallable}]=await Promise.all([
-      import('https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js'),
-      import('https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js'),
-      import('https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js'),
-      import('https://www.gstatic.com/firebasejs/11.10.0/firebase-functions.js')
-    ]);
-    const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),fn=getFunctions(app,cloudFunctionsRegion);
-    cloud={app,auth,db,fn,doc,collection,onSnapshot,onAuthStateChanged,signInWithEmailAndPassword,signOut,httpsCallable};
+  try{
+    const {createSparkBackend}=await import('./spark-backend.js');
+    cloud=createSparkBackend();
     return true;
-  }catch(e){console.error('Firebase 初始化失敗',e);root.innerHTML=shell(`<div class="message error">Firebase 無法載入：${h(e.message)}。請檢查連線與設定。</div>`);return false;}
+  }catch(e){
+    console.error('Firebase Spark 初始化失敗',e);
+    root.innerHTML=shell(`<div class="message error">Firebase 無法載入：${h(e.message)}。請檢查網路與資料庫設定。</div>`);
+    return false;
+  }
 }
 async function callable(name,data={}) {
   if(!isReady) {
     if(name==='getStationProfile') {const inst=sample[requestedStation-1];return {stationId:String(requestedStation),instrumentId:inst?.id||null,instrument:inst||null};}
     if(name==='getClasses')return {classes:['101','102','201','202'].map(code=>({code,seats:Array.from({length:30},(_,i)=>i+1)}))};
     if(name==='getStudent')return {id:`${data.classCode}_${data.seat}`,classCode:data.classCode,seat:data.seat,name:`測試學生 ${data.classCode}-${String(data.seat).padStart(2,'0')}`};
-    if(name==='castVote') {const k=`${data.classCode}_${data.seat}_${sample[requestedStation-1].category}`;if(demoVotes.has(k))throw Error('這位測試學生已在本類別投過票（僅限本頁預覽）');demoVotes.add(k);sample[requestedStation-1].votes++;return {ok:true,instrument:sample[requestedStation-1].name};}
-    throw Error('Firebase 尚未連接：這項功能需要雲端後端。');
+    if(name==='castVote') {const inst=sample[requestedStation-1],k=`${data.classCode}_${data.seat}_${inst.category}`;if(demoVotes.has(k))throw Error('這位測試學生已在本類別投過票（僅限本頁預覽）');demoVotes.add(k);inst.votes++;return {ok:true,instrument:inst.name};}
+    throw Error('Firebase 尚未連接：此功能需要登入管理員帳號。');
   }
-  const fn=cloud.httpsCallable(cloud.fn,name);const r=await fn(data);return r.data;
+  return cloud.call(name,data);
+}
+function cloudReadError(area,e){
+  console.error(`Firebase ${area}讀取失敗`,e);
+  if(view==='display'||view==='home')root.innerHTML=shell(`<div class="message error">無法讀取 ${h(area)}：${h(e.message)}。請確認 Firestore 已建立、Rules 已發布，並已允許讀取公開統計資料。本頁不是正式投票結果。</div>`);
 }
 function watchResults(){
   watchers.forEach(u=>u());watchers=[];
   const {db,doc,collection,onSnapshot}=cloud;
-  watchers.push(onSnapshot(doc(db,'settings','public'),s=>{if(s.exists()){settings=s.data();if(view==='display')drawDisplay(makeItems());if(view==='home')mainHome();}},e=>console.warn('settings',e)));
-  watchers.push(onSnapshot(collection(db,'instruments'),s=>{instruments=s.docs.map(d=>({id:d.id,...d.data()}));subscribeTallies();},e=>console.warn('instruments',e)));
+  watchers.push(onSnapshot(doc(db,'settings','public'),s=>{if(s.exists()){settings=s.data();if(view==='display')drawDisplay(makeItems());if(view==='home')mainHome();}},e=>cloudReadError('活動設定',e)));
+  watchers.push(onSnapshot(collection(db,'instruments'),s=>{instruments=s.docs.map(d=>({id:d.id,...d.data()}));subscribeTallies();},e=>cloudReadError('樂器資料',e)));
 }
 function subscribeTallies(){
   watchers.splice(2).forEach(u=>u());
@@ -77,7 +79,7 @@ function subscribeTallies(){
     const u=cloud.onSnapshot(cloud.collection(cloud.db,'tallies',it.id,'shards'),snap=>{
       tallies[it.id]=snap.docs.reduce((n,d)=>n+Number(d.data().count||0),0);
       if(view==='display')drawDisplay(makeItems());
-    },e=>console.warn('tallies',e));
+    },e=>cloudReadError('票數資料',e));
     watchers.push(u);
   }
   if(view==='display')drawDisplay(makeItems());
@@ -133,7 +135,7 @@ function stationConfirm(){
   document.getElementById('confirm').onclick=async()=>{
     if(stationBusy)return;stationBusy=true;document.getElementById('confirm').disabled=true;
     try{const r=await callable('castVote',{classCode:student.classCode,seat:student.seat});stationResult(true,`${student.name}，投給「${r.instrument}」成功！`)}
-    catch(e){stationResult(false,e.code==='functions/already-exists'?`此同學的${label(stationInfo.instrument.category)}已投過票！`:e.message)}
+    catch(e){stationResult(false,e.code==='vote/already-exists'?`此同學的${label(stationInfo.instrument.category)}已投過票！`:e.message)}
     finally{stationBusy=false;}
   };
 }
@@ -163,14 +165,14 @@ function adminScreen(){
  const d=adminDashboard,items=d.instruments.sort((a,b)=>(a.order||0)-(b.order||0)),active=items.filter(i=>i.active);
  const settings=d.settings||settings;
  const controls=`<div class="admin-actions"><button class="button ghost" id="refreshAdmin">⟳ 重新整理</button><button class="button ghost" id="logout">登出</button></div>`;
- root.innerHTML=shell(`<div class="admin-top"><div><div class="eyebrow">🔐 教師管理</div><h1>樂器投票管理中心</h1><p>雲端共用資料 · 班級投票率 · 國樂管樂分別計票</p></div>${controls}</div><div id="adminMessage"></div>
+ root.innerHTML=shell(`<div class="admin-top"><div><div class="eyebrow">🔐 教師管理</div><h1>樂器投票管理中心</h1><p>Firebase Spark 免費版 · 班級投票率 · 國樂管樂分別計票</p></div>${controls}</div><div id="adminMessage"></div>
  <div class="mini-metrics"><div><span>學生總數</span><strong>${d.studentCount}</strong></div><div><span>有效選票</span><strong>${d.voteCount}</strong></div><div><span>國樂項目</span><strong>${active.filter(x=>x.category==='national').length}</strong></div><div><span>管樂項目</span><strong>${active.filter(x=>x.category==='band').length}</strong></div></div>
  <section class="admin-panel"><h2>⚙ 活動設定</h2><div class="inline-fields"><label>活動名稱<input id="eventTitle" maxlength="80" value="${h(settings.title||'')}"></label><label>活動狀態<select id="eventStatus">${opt([{id:'open',label:'開放投票'},{id:'paused',label:'暫停投票'},{id:'closed',label:'結束投票'}],settings.status)}</select></label><label class="checkline"><input id="hideCounts" type="checkbox" ${settings.hideCounts?'checked':''}>電視暫時隱藏票數</label></div><button id="saveSettings" class="button primary">儲存活動設定</button></section>
- <section class="admin-panel"><h2>📱 六台 iPad 站點設定</h2><div class="settings-grid">${[1,2,3,4,5,6].map(n=>{const st=d.stations.find(s=>s.id===String(n));return `<div class="setting-item"><b>第 ${n} 站</b><select data-station="${n}">${opt([{id:'',label:'尚未指定'},...active.map(i=>({id:i.id,label:`${label(i.category)}・${i.name}`}))],st?.instrumentId||'')}</select></div>`}).join('')}</div><p class="fine">站點使用獨立的 Firebase Authentication 帳號，後端依登入身分鎖定第幾站。</p><details><summary>綁定站點帳號</summary><div class="inline-fields"><label>投票站<select id="accountStation">${opt([1,2,3,4,5,6].map(n=>({id:n,label:`第 ${n} 站`})),1)}</select></label><label>已在 Firebase Authentication 建立的 Email<input type="email" id="accountEmail" placeholder="station1@example.edu.tw"></label></div><button class="button ghost" id="bindAccount">綁定此帳號</button></details></section>
+ <section class="admin-panel"><h2>📱 六台 iPad 站點設定</h2><div class="settings-grid">${[1,2,3,4,5,6].map(n=>{const st=d.stations.find(s=>s.id===String(n));return `<div class="setting-item"><b>第 ${n} 站</b><select data-station="${n}">${opt([{id:'',label:'尚未指定'},...active.map(i=>({id:i.id,label:`${label(i.category)}・${i.name}`}))],st?.instrumentId||'')}</select></div>`}).join('')}</div><p class="fine">站點使用獨立的 Firebase Authentication 帳號；Firestore 安全規則會驗證帳號綁定站號。Spark 免費方案需使用帳號 UID 綁定。</p><details><summary>綁定站點帳號</summary><div class="inline-fields"><label>投票站<select id="accountStation">${opt([1,2,3,4,5,6].map(n=>({id:n,label:`第 ${n} 站`})),1)}</select></label><label>站點帳號 UID（不是 Email）<input type="text" id="accountUID" placeholder="請從 Firebase Authentication → 使用者 複製 UID"></label></div><button class="button ghost" id="bindAccount">綁定此帳號</button></details></section>
  <section class="admin-panel"><h2>🎼 國樂／管樂項目</h2><div class="instruments-grid">${items.map(i=>`<div class="instrument-row"><span>${h(i.emoji)} ${h(i.name)} <small>(${label(i.category)})${!i.active?' [已封存]':''}</small></span>${i.active?`<button class="button tiny ghost" data-edit="${h(i.id)}">修改</button><button class="button tiny danger" data-archive="${h(i.id)}">刪除／封存</button>`:''}</div>`).join('')}</div><h3>新增／修改樂器</h3><form id="instrumentForm"><input type="hidden" id="editId"><div class="inline-fields"><label>樂器名稱<input id="instName" placeholder="例如：薩克斯風" required></label><label>類別<select id="instCategory">${opt([{id:'national',label:'國樂'},{id:'band',label:'管樂'}],'national')}</select></label><label>圖示<input id="instEmoji" placeholder="🎵" maxlength="8"></label><label>色彩<input id="instColor" type="color" value="#6686ca"></label></div><button class="button primary" type="submit">儲存樂器</button></form></section>
  <section class="admin-panel"><h2>📚 學生名冊</h2><p>可匯入 CSV 或 Excel XLSX，第一列請使用「班級、座號、姓名」。每人國樂及管樂各限一票。</p><div class="inline-fields"><label>上傳名冊<input id="rosterFile" type="file" accept=".csv,.xlsx,.xls"></label><label class="checkline"><input id="replaceRoster" type="checkbox">整份替換（已有投票不可使用）</label></div><button id="importRoster" class="button primary">匯入學生</button><button id="template" class="button ghost">下載名冊範本</button></section>
  <section class="admin-panel"><h2>🏫 各班投票率</h2><div class="tablewrap"><table><thead><tr><th>班級</th><th>學生數</th><th>國樂已投</th><th>國樂完成率</th><th>管樂已投</th><th>管樂完成率</th><th>查看</th></tr></thead><tbody>${d.classes.map(c=>`<tr><td>${h(c.classCode)}</td><td>${c.total}</td><td>${c.national}</td><td>${c.total?Math.round(c.national/c.total*100):0}%</td><td>${c.band}</td><td>${c.total?Math.round(c.band/c.total*100):0}%</td><td><button class="button tiny ghost" data-classinfo="${h(c.classCode)}">明細</button></td></tr>`).join('')}</tbody></table></div><div id="classInfo"></div><div class="actions"><button id="exportClasses" class="button ghost">匯出班級統計 CSV</button><button id="exportVotes" class="button ghost">匯出投票明細 CSV</button></div></section>
- <section class="admin-panel dangerzone"><h2>⚠ 測試資料管理</h2><p>清除選票前請暫停投票。此操作不可復原，真實活動請先匯出備份。</p><button id="clearVotes" class="button danger">清除全部選票與票數</button></section>`);
+ <section class="admin-panel dangerzone"><h2>⚠ 測試資料管理</h2><p>清除選票前請暫停投票。此操作不可復原。正式活動請先匯出備份，並在暫停投票後才執行。</p><button id="clearVotes" class="button danger">清除全部選票與票數</button></section>`);
  document.getElementById('logout').onclick=logout;
  document.getElementById('refreshAdmin').onclick=adminStart;
  document.getElementById('saveSettings').onclick=async()=>{await runAdmin(async()=>{
@@ -179,7 +181,7 @@ function adminScreen(){
    await callable('adminAction',{op:'setStatus',status:document.getElementById('eventStatus').value});
  },'設定已儲存')};
  document.querySelectorAll('[data-station]').forEach(el=>el.onchange=()=>runAdmin(()=>callable('adminAction',{op:'assignStation',stationId:el.dataset.station,instrumentId:el.value}),'站點已更新'));
- document.getElementById('bindAccount').onclick=()=>runAdmin(()=>callable('adminAction',{op:'bindStationUser',email:document.getElementById('accountEmail').value,stationId:document.getElementById('accountStation').value}),'站點帳號已綁定');
+ document.getElementById('bindAccount').onclick=()=>runAdmin(()=>callable('adminAction',{op:'bindStationUser',uid:document.getElementById('accountUID').value,stationId:document.getElementById('accountStation').value}),'站點帳號已綁定');
  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const i=items.find(i=>i.id===b.dataset.edit);document.getElementById('editId').value=i.id;document.getElementById('instName').value=i.name;document.getElementById('instCategory').value=i.category;document.getElementById('instCategory').disabled=true;document.getElementById('instEmoji').value=i.emoji;document.getElementById('instColor').value=i.color;document.getElementById('instName').focus()});
  document.querySelectorAll('[data-archive]').forEach(b=>b.onclick=()=>{if(confirm('確定要封存此樂器？已有票數保留歷史資料，且需先解除投票站綁定。'))runAdmin(()=>callable('adminAction',{op:'archiveInstrument',id:b.dataset.archive}),'樂器已封存')});
  document.getElementById('instrumentForm').onsubmit=e=>{e.preventDefault();return runAdmin(()=>callable('adminAction',{op:'upsertInstrument',id:document.getElementById('editId').value,name:document.getElementById('instName').value,category:document.getElementById('instCategory').value,emoji:document.getElementById('instEmoji').value,color:document.getElementById('instColor').value}),'樂器已儲存')};
@@ -188,7 +190,7 @@ function adminScreen(){
  document.querySelectorAll('[data-classinfo]').forEach(b=>b.onclick=()=>showClassDetail(b.dataset.classinfo));
  document.getElementById('exportClasses').onclick=()=>csvDownload('各班投票統計.csv',d.classes.map(c=>({'班級':c.classCode,'學生數':c.total,'國樂已投':c.national,'國樂完成率':`${c.total?Math.round(c.national/c.total*100):0}%`,'管樂已投':c.band,'管樂完成率':`${c.total?Math.round(c.band/c.total*100):0}%`})));
  document.getElementById('exportVotes').onclick=async()=>{try{const r=await callable('adminAction',{op:'exportVotes'});csvDownload('投票明細_僅限管理員.csv',r.rows.map(x=>({'班級':x.classCode,'座號':x.seat,'姓名':x.name,'類別':label(x.category),'樂器':x.instrument,'站點':x.station})))}catch(e){alert(e.message)}};
- document.getElementById('clearVotes').onclick=()=>{if(confirm('確認清除所有選票？此操作無法還原。'))runAdmin(()=>callable('adminAction',{op:'clearTestVotes'}),'選票已清空')};
+ document.getElementById('clearVotes').onclick=()=>{if(prompt('此操作會清除全部選票及統計，無法復原。請輸入「清除全部選票」確認：')==='清除全部選票')runAdmin(()=>callable('adminAction',{op:'clearTestVotes'}),'選票已清空')};
 }
 async function runAdmin(fn,msg){const m=document.getElementById('adminMessage');try{m.innerHTML='<div class="message">處理中…</div>';await fn();await adminStart();const el=document.getElementById('adminMessage');if(el)el.innerHTML=`<div class="message success">✓ ${h(msg)}</div>`}catch(e){if(m)m.innerHTML=`<div class="message error">${h(e.message)}</div>`}}
 async function showClassDetail(cls){try{const res=await callable('adminAction',{op:'classStudents',classCode:cls});const html=`<h3>${h(cls)} 班學生投票進度</h3><div class="tablewrap"><table><thead><tr><th>座號</th><th>姓名</th><th>國樂</th><th>管樂</th></tr></thead><tbody>${res.rows.map(s=>`<tr><td>${s.seat}</td><td>${h(s.name)}</td><td>${s.national?'✅ 已投':'— 未投'}</td><td>${s.band?'✅ 已投':'— 未投'}</td></tr>`).join('')}</tbody></table></div>`;document.getElementById('classInfo').innerHTML=html;}catch(e){alert(e.message)}}
@@ -197,7 +199,7 @@ async function importRoster(){
  let rows=[];
  try{
   if(/\.xlsx?$/i.test(file.name)){
-    if(!window.XLSX){await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';script.onload=resolve;script.onerror=()=>reject(Error('無法載入 Excel 讀取工具，請改存 UTF-8 CSV'));document.head.appendChild(script)})}
+    if(!window.XLSX){await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';script.onload=resolve;script.onerror=()=>reject(Error('無法載入 Excel 讀取工具，請改存 UTF-8 CSV'));document.head.appendChild(script)})}
     const x=window.XLSX.read(await file.arrayBuffer(),{type:'array'}),sheet=x.Sheets[x.SheetNames[0]];
     rows=window.XLSX.utils.sheet_to_json(sheet,{defval:''});
   } else {
@@ -212,7 +214,7 @@ async function importRoster(){
 }
 function parseCsv(text){const out=[];let row=[],field='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'&&text[i+1]==='"'){field+='"';i++}else if(c==='"')quoted=false;else field+=c}else if(c==='"')quoted=true;else if(c===','){row.push(field);field=''}else if(c==='\n'){row.push(field.replace(/\r$/,''));out.push(row);row=[];field=''}else field+=c}if(field||row.length){row.push(field);out.push(row)}return out;}
 async function start(){
- if(view==='home')mainHome();else if(view==='display')renderDemoDisplay();else if(!isReady)await renderProtected();else root.innerHTML=shell('<div class="loader">正在檢查雲端授權…</div>');
+ if(view==='home')mainHome();else if(view==='display'){if(demoMode)renderDemoDisplay();else drawDisplay([],false);}else if(!isReady)await renderProtected();else root.innerHTML=shell('<div class="loader">正在檢查雲端授權…</div>');
  if(!isReady)return;
  if(!await initCloud())return;
  if(view==='home'||view==='display')watchResults();
