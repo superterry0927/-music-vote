@@ -1,13 +1,110 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /settings/{id} { allow read: if id == 'public'; allow write: if false; }
-    match /instruments/{id} { allow read: if true; allow write: if false; }
-    match /tallies/{instrumentId}/shards/{shardId} { allow read: if true; allow write: if false; }
-    match /roles/{uid} {
-      allow get: if request.auth != null && request.auth.uid == uid;
-      allow list, write: if false;
+    function rolePath(uid) { return /databases/$(database)/documents/roles/$(uid); }
+    function settingsPath() { return /databases/$(database)/documents/settings/public; }
+    function stationPath(sid) { return /databases/$(database)/documents/stations/$(sid); }
+    function instrumentPath(iid) { return /databases/$(database)/documents/instruments/$(iid); }
+    function studentPath(sid) { return /databases/$(database)/documents/students/$(sid); }
+    function votePath(vid) { return /databases/$(database)/documents/votes/$(vid); }
+    function shardPath(iid, shard) { return /databases/$(database)/documents/tallies/$(iid)/shards/$(shard); }
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn() && exists(rolePath(request.auth.uid)) &&
+        get(rolePath(request.auth.uid)).data.active == true &&
+        get(rolePath(request.auth.uid)).data.role == 'admin';
     }
-    match /{document=**} { allow read, write: if false; }
+    function isStation() {
+      return signedIn() && exists(rolePath(request.auth.uid)) &&
+        get(rolePath(request.auth.uid)).data.active == true &&
+        get(rolePath(request.auth.uid)).data.role == 'station';
+    }
+    function stationFor(sid) {
+      return isStation() && get(rolePath(request.auth.uid)).data.stationId == sid;
+    }
+    function shardValid(shard) { return shard is string && shard.matches('^([0-9]|1[0-9]|2[0-3])$'); }
+    function catValid(cat) { return cat in ['national', 'band']; }
+
+    // A vote and its counter increment MUST be written together. A deterministic
+    // vote ID enforces one vote per student per category, including concurrent stations.
+    function validVoteCreate(vid) {
+      let v = request.resource.data;
+      let st = get(stationPath(v.stationId)).data;
+      let inst = get(instrumentPath(v.instrumentId)).data;
+      let stu = get(studentPath(v.studentId)).data;
+      let tallyPath = shardPath(v.instrumentId, v.shard);
+      return v.keys().hasAll(['studentId','classCode','seat','category','instrumentId','stationId','shard','createdAt']) &&
+        v.keys().hasOnly(['studentId','classCode','seat','category','instrumentId','stationId','shard','createdAt']) &&
+        v.studentId is string && v.classCode is string && v.seat is int &&
+        v.stationId is string && v.instrumentId is string &&
+        v.classCode.matches('^[0-9]{3,4}$') && v.seat >= 1 && v.seat <= 60 &&
+        catValid(v.category) && shardValid(v.shard) &&
+        vid == v.studentId + '_' + v.category &&
+        stationFor(v.stationId) && get(settingsPath()).data.status == 'open' &&
+        st.enabled == true && st.instrumentId == v.instrumentId &&
+        inst.active == true && inst.category == v.category &&
+        stu.active == true && stu.classCode == v.classCode && stu.seat == v.seat &&
+        v.createdAt == request.time &&
+        getAfter(tallyPath).data.lastVoteId == vid &&
+        (exists(tallyPath) ? getAfter(tallyPath).data.count == get(tallyPath).data.count + 1 : getAfter(tallyPath).data.count == 1);
+    }
+
+    // A station cannot increment totals without creating a NEW matching vote in
+    // the very same atomic transaction. Shard count must increase by exactly one.
+    function validShardWrite(iid, shard) {
+      let countDoc = request.resource.data;
+      let vid = countDoc.lastVoteId;
+      let v = getAfter(votePath(vid)).data;
+      return isStation() && shardValid(shard) &&
+        countDoc.keys().hasAll(['count','lastVoteId']) &&
+        countDoc.keys().hasOnly(['count','lastVoteId']) &&
+        countDoc.count is int && countDoc.lastVoteId is string &&
+        !exists(votePath(vid)) &&
+        v.instrumentId == iid && v.shard == shard &&
+        stationFor(v.stationId) &&
+        get(settingsPath()).data.status == 'open';
+    }
+
+    match /settings/{id} {
+      allow read: if id == 'public';
+      allow create, update, delete: if isAdmin();
+    }
+    match /roles/{uid} {
+      allow get: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      allow list, create, update, delete: if isAdmin();
+    }
+    match /stations/{sid} {
+      allow read: if isStation() || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+    match /instruments/{iid} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+    match /classes/{code} {
+      allow read: if isStation() || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+    match /students/{sid} {
+      allow read: if isStation() || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+    match /votes/{vid} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() || validVoteCreate(vid);
+      allow update, delete: if isAdmin();
+    }
+    match /tallies/{iid} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+      match /shards/{shard} {
+        allow read: if true;
+        allow create: if isAdmin() || (validShardWrite(iid, shard) && request.resource.data.count == 1);
+        allow update: if isAdmin() ||
+          (validShardWrite(iid, shard) && resource.data.count is int && request.resource.data.count == resource.data.count + 1);
+        allow delete: if isAdmin();
+      }
+    }
+    match /{doc=**} { allow read, write: if false; }
   }
 }
