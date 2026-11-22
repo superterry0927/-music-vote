@@ -5,7 +5,7 @@
  */
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-import {getFirestore,doc,collection,onSnapshot,getDoc,getDocs,setDoc,addDoc,deleteDoc,writeBatch,runTransaction,serverTimestamp,query,where} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {getFirestore,doc,collection,onSnapshot,getDoc,getDocs,setDoc,addDoc,deleteDoc,writeBatch,runTransaction,serverTimestamp,increment,query,where} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {firebaseConfig} from './firebase-config.js';
 
 const SEED = [
@@ -91,22 +91,23 @@ export function createSparkBackend(){
    const voteDoc=d('votes',voteId);
    const shard=String(Math.floor(Math.random()*SHARDS));
    const shardDoc=doc(db,'tallies',instId,'shards',shard);
-   return runTransaction(db,async tx=>{
-     // All document reads happen before writes (Firestore transaction requirement).
-     const [settingSnap,stationSnap,instrSnap,studentSnap,voteSnap,shardSnap,roleSnap]=await Promise.all([
-       tx.get(settingsDoc),tx.get(stationDoc),tx.get(instDoc),tx.get(studentDoc),tx.get(voteDoc),tx.get(shardDoc),tx.get(roleRef())
-     ]);
-     ensure(roleSnap.exists()&&roleSnap.data().active===true&&roleSnap.data().role==='station'&&String(roleSnap.data().stationId)===sid,'permission-denied','此帳號沒有該站投票權限');
-     ensure(settingSnap.exists()&&settingSnap.data().status==='open','failed-precondition','投票尚未開放，請洽工作人員');
-     ensure(stationSnap.exists()&&stationSnap.data().enabled!==false&&stationSnap.data().instrumentId===instId,'failed-precondition','投票站樂器剛剛變更，請重新整理');
-     ensure(instrSnap.exists()&&instrSnap.data().active===true&&instrSnap.data().category===category,'failed-precondition','此樂器已停用');
-     ensure(studentSnap.exists()&&studentSnap.data().active!==false&&studentSnap.data().classCode===cls&&studentSnap.data().seat===seat,'not-found','查無學生');
-     ensure(!voteSnap.exists(),'vote/already-exists',`這位學生的${category==='national'?'國樂':'管樂'}已經投過票`);
-     const count=shardSnap.exists()?Number(shardSnap.data().count||0):0;
-     tx.set(voteDoc,{studentId:sidStudent,classCode:cls,seat,category,instrumentId:instId,stationId:sid,shard,createdAt:serverTimestamp()});
-     tx.set(shardDoc,{count:count+1,lastVoteId:voteId});
-     return {ok:true,category,instrument:instrSnap.data().name};
-   },{maxAttempts:6});
+   // Do NOT read voteDoc: Firestore Rules intentionally restrict individual
+   // vote reads to admins; station accounts can only CREATE new votes.
+   // A batched write is atomic. The deterministic vote ID means:
+   // - First vote: voteDoc is created and tally shard increments by exactly 1.
+   // - Duplicate: writing the same ID is an UPDATE, forbidden to stations,
+   //   so the entire batch fails and the tally remains unchanged.
+   // Firestore Rules validate station authorization, active student,
+   // active event, the instrument/category, and the linked tally update
+   // using getAfter(). Never broaden read permissions to fix this.
+   const batch=writeBatch(db);
+   batch.set(voteDoc,{
+     studentId:sidStudent,classCode:cls,seat,category,
+     instrumentId:instId,stationId:sid,shard,createdAt:serverTimestamp()
+   });
+   batch.set(shardDoc,{count:increment(1),lastVoteId:voteId},{merge:true});
+   await batch.commit();
+   return {ok:true,category,instrument:inst.data().name};
  }
  async function adminAction(data){
    await authRole('admin');

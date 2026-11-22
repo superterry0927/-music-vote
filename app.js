@@ -148,7 +148,13 @@ function stationConfirm(){
   document.getElementById('confirm').onclick=async()=>{
     if(stationBusy)return;stationBusy=true;document.getElementById('confirm').disabled=true;
     try{const r=await callable('castVote',{classCode:student.classCode,seat:student.seat});stationResult(true,`${student.name}，投給「${r.instrument}」成功！`)}
-    catch(e){stationResult(false,e.code==='vote/already-exists'?`此同學的${label(stationInfo.instrument.category)}已投過票！`:e.message)}
+    catch(e){
+      const permissionDenied=e.code==='permission-denied'||e.code==='firestore/permission-denied';
+      const msg=permissionDenied
+        ?`這張票未寫入：可能已投過${label(stationInfo.instrument.category)}，或站點／資料庫規則尚未授權。請工作人員確認，勿重複連點。`
+        :(e.code==='vote/already-exists'?`此同學的${label(stationInfo.instrument.category)}已投過票！`:e.message);
+      stationResult(false,msg);
+    }
     finally{stationBusy=false;}
   };
 }
