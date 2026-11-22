@@ -1,61 +1,45 @@
-# 北成國樂管樂投票｜Firebase 最後上線步驟
+# 2026-11-22：北成樂器投票 v4 Spark 免費版下一步
 
-本網站的 **GitHub Pages 已發布成功**：2026-11-22 已查核 GitHub Actions「pages build and deployment」顯示 success。
+✅ GitHub Pages： https://superterry0927.github.io/-music-vote/  
+✅ Firebase 網頁設定已填入：`music-vote-3de89`  
+✅ Authentication 的「電子郵件／密碼」已由你啟用。  
+✅ 前端已改成不呼叫 Cloud Functions 的 Firestore 交易投票。  
+⛔ **Firestore 資料庫、Rules、登入角色尚待你在 Firebase Console 啟用／驗證；未啟用不能正式投票。**
 
-- 網站：https://superterry0927.github.io/-music-vote/
-- 模擬操作：https://superterry0927.github.io/-music-vote/?demo=1
-- Firebase 專案：`music-vote-3de89`
+## 完全免費的手動設定
 
-> **注意：網站已發布不等於可以正式投票。** Firebase 的資料庫、登入、Cloud Functions、安全規則及角色必須部署後才能讓六台 iPad 同步計票。目前不要匯入真實學生名冊。
+### 1. 確認 Cloud Firestore 存在
 
-## A. Firebase 控制台先完成三項
+前往 https://console.firebase.google.com/project/music-vote-3de89/firestore ，未建立才點「建立資料庫」，選 Production mode。使用 Spark 免費方案，不用 Blaze。
 
-登入 https://console.firebase.google.com/project/music-vote-3de89/overview
+### 2. 貼上並發布 Firestore Rules（最重要）
 
-1. **Firestore Database → Create database**：選擇 Standard edition（若有版本選項）、`(default)` 資料庫，建議區域 `asia-east1`（臺灣；若本專案已固定其他區域則以現有區域為準），**Production mode**。注意建立後資料庫位置通常不能直接更改。
-2. **Authentication → Sign-in method**：啟用「電子郵件／密碼」。再至 Authentication → Settings → Authorized domains，加入 `superterry0927.github.io`（只輸入網域，不要加 https:// 或路徑）。
-3. **Usage and billing**：將專案升級為 Blaze 按量計費方案並建立預算警示。部署 Cloud Functions (2nd gen) 需要 Blaze。
+開啟 GitHub 的 [`firestore.rules`](./firestore.rules) 並全選複製，貼到 Firebase → Firestore Database → **規則 (Rules)** → **發布**。不要使用 `allow read, write: if true` 的測試規則！
 
-## B. 不用安裝工具，直接用瀏覽器 Cloud Shell 部署
+### 3. 建立管理員
 
-在 Firebase 控制台開啟 Cloud Shell（或在 Google Cloud Console 右上角點選 Cloud Shell 圖示），用具有此 Firebase 專案權限的 Google 帳號執行：
+Firebase → Authentication → 使用者 → 建立教師帳號，複製 **UID**。到 Firestore → 資料，建立 `roles/<UID>` 文件，欄位：
 
-```bash
-git clone https://github.com/superterry0927/-music-vote.git
-cd -- -music-vote
-npm --prefix functions install
-firebase deploy --project music-vote-3de89 --only firestore:rules,functions
-```
+| 欄位 | 類型 | 值 |
+| --- | --- | --- |
+| `role` | String | `admin` |
+| `active` | Boolean | `true` |
 
-若 Cloud Shell 沒有 firebase 指令，先在 Cloud Shell 執行 `npm install -g firebase-tools`，再重試最後一行。部署會更新這個專案的 Firestore Security Rules；若有其他應用共用相同專案，請先核對規則。
+注意：UID 是 Auth 使用者 ID，不是 Email；密碼不要貼到 GitHub 或聊天中。
 
-部署成功後應看到四個 Callable Functions：
-`getClasses`、`getStudent`、`getStationProfile`、`castVote`，以及 `adminAction`（共五個）。
+### 4. 初始化與六站帳號
 
-## C. 建立管理員角色（只在 Firebase 控制台操作，不要公開密碼）
+在 https://superterry0927.github.io/-music-vote/?view=admin 登入，點「建立測試活動」。建立成功後，Firebase Authentication 再建立六組 Email／密碼投票站帳號；把各個使用者的 **UID** 複製到後台「綁定站點帳號」。
 
-1. **Authentication → Users → Add user** 建立教師管理員 Email/Password 帳號，密碼請自行保存。
-2. 複製這個帳號的 **UID**。
-3. **Firestore Database → Data → Start collection**：
-   - Collection ID：`roles`
-   - Document ID：剛剛複製的 UID
-   - Field 1：`role`，類型 String，值 `admin`
-   - Field 2：`active`，類型 Boolean，值 `true`
-4. 開啟 https://superterry0927.github.io/-music-vote/?view=admin ，用剛才的 Email/Password 登入，按「初始化測試活動」。系統會建立 120 筆**虛構測試名冊**，預設為暫停投票。
-5. Authentication → Users 再建立六組投票站用 Email/Password 帳號。登入管理後台，依序將每個帳號綁到第 1～6 站，確認樂器設定。
-6. 每台 iPad 分別用專屬站點帳號登入：
-   - 第1站：`?view=station&station=1`
-   - 第2～6站：只需將 `station=1` 改成 2～6
-   - 電視：`?view=display`
-7. 完成六站測試後，管理員才將狀態切換為「開放投票」。
+### 5. 測試
 
-## D. 上線前必須測試
+活動改為開放，使用四班共 120 人的虛構測試資料測一次：同位學生投「國樂」一次成功、再投另一國樂應被阻止、投「管樂」成功；用電視模式確認兩類比例。正式名冊導入前要先清空測試票，再暫停／替換學生名冊。
 
-- 同位學生同類別換兩台 iPad 同時投票，只能成功一票。
-- 同位學生可以投一張國樂票＋一張管樂票。
-- 電視在六站送票後即時更新票數及比例。
-- iPad 重新整理／斷網時不可誤認投票成功。
-- 匯入的名冊只能由授權站點查詢，電視和公開頁面不得顯示姓名。
-- **正式名冊上傳前請先暫停投票，清空測試票，並確認授權與資安。**
+### 其他提醒
 
-此文件是操作指引，不代表我已經替你的 Firebase 雲端部署。Firebase 帳戶尚未連接 ChatGPT，雲端部署必須由有專案權限的使用者在 Cloud Shell 完成。
+- GitHub Pages 的網址已發布，但不能用來推論 Firebase 也部署完成。
+- `?demo=1` 是不寫入雲端的模擬操作，可隨時先試介面。
+- **不需要安裝 Firebase 外掛、不需要 Cloud Shell、不需要 Cloud Functions、不需要付款或信用卡。**
+- Firestore 免費額度用完會受限；測試前先確認有足夠配額。
+
+完整文件請看 [README.md](./README.md)。
